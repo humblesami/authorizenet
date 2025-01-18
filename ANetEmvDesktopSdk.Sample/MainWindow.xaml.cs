@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Xml;
 using System.Windows;
 using System.Diagnostics;
+using System.ComponentModel;
+using System.Collections.Generic;
 using AuthorizeNet.Api.Contracts.V1;
 using AuthorizeNet.Api.Controllers;
 using AuthorizeNet.Api.Controllers.Bases;
-using System.ComponentModel;
-using System.Xml;
+
 
 namespace ANetEmvDesktopSdk.Sample
 {
@@ -23,11 +24,15 @@ namespace ANetEmvDesktopSdk.Sample
             InitializeComponent();
             System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            
+
             backgroundWorkerLogin = new BackgroundWorker();
             this.backgroundWorkerLogin.DoWork += new DoWorkEventHandler(this.backgroundWorkerLogin_GetAuthenticationToken);
             this.backgroundWorkerLogin.ProgressChanged += new ProgressChangedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenProgress);
             this.backgroundWorkerLogin.RunWorkerCompleted += new RunWorkerCompletedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenCompleted);
+            this.txtUsername.Text = "umarfarooq845";
+            this.txtPassword.Password = "Cybat@2025";
+            this.skipSignature.IsChecked = true;
+            this.sandBox.IsChecked = true;
         }
 
         private void OnPayClicked(object context, RoutedEventArgs state)
@@ -203,8 +208,6 @@ namespace ANetEmvDesktopSdk.Sample
             {
                 Debug.WriteLine("RunnerBackground completed with some error");
                 this.btnPay.IsEnabled = true;
-                ErrorScreen errorScreen = new ErrorScreen();
-                errorScreen.ShowDialog();
             }
         }
     }

@@ -1,16 +1,22 @@
 ﻿using System;
-using System.Globalization;
-using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Text;
 using System.Linq;
 using System.Windows;
-using AuthorizeNet.Api.Controllers.Bases;
-using AuthorizeNet.Api.Contracts.V1;
 using System.Diagnostics;
-using ANetEmvDesktopSdk.Services;
+using System.Net.Sockets;
 using ANetEmvDesktopSdk.UI;
-using ANetEmvDesktopSdk.Common;
+using System.Globalization;
 using ANetEmvDesktopSdk.SDK;
+using System.Threading.Tasks;
+using ANetEmvDesktopSdk.Common;
 using ANetEmvDesktopSdk.Models;
+using System.Collections.Generic;
+using ANetEmvDesktopSdk.Services;
+using AuthorizeNet.Api.Contracts.V1;
+using AuthorizeNet.Api.Controllers.Bases;
+
 
 namespace ANetEmvDesktopSdk.Sample
 {
@@ -29,7 +35,7 @@ namespace ANetEmvDesktopSdk.Sample
         bool skipSignature = false;
         private ListWindow listWindow;
         private bool showReceipt = true;
-
+        private AuthorizeTcpListner tcpListner = null;
 
         private SdkLauncher launcher = null;
         public MainController()
@@ -37,6 +43,7 @@ namespace ANetEmvDesktopSdk.Sample
             InitializeComponent();
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Application.Current.Exit += new ExitEventHandler(this.OnApplicationExit);
+            this.InitTcpServer();            
         }
 
         public MainController(AuthorizeNet.Environment iEnvironment,
@@ -47,6 +54,7 @@ namespace ANetEmvDesktopSdk.Sample
             string iDeviceID,
             string iSessionToken)
         {
+            Console.WriteLine("Session Token in Constructor 2 => " + iSessionToken);
             InitializeComponent();
             Application.Current.Exit += new ExitEventHandler(this.OnApplicationExit);
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -57,28 +65,60 @@ namespace ANetEmvDesktopSdk.Sample
             this.showReceipt = iShowReceipt;
             this.sessionToken = iSessionToken;
             this.deviceID = iDeviceID;
-
-            Debug.Write("Session Token in Constructor" + iSessionToken);
+            
             Random random = new Random();
             this.amount.Text = (random.Next(1, 1000)).ToString();
             this.launcher = new SdkLauncher(iEnvironment, iCurrencyCode, iTerminalID, iSkipSignature, iShowReceipt);
             this.launcher.setMerchantInfo(merchantName, merchantID);
             this.launcher.enableLogging();
+            this.InitTcpServer();
+        }
+
+        private void InitTcpServer()
+        {
+            tcpListner = new AuthorizeTcpListner();
+            tcpListner.InputReceived += this.OnInputReceived;
+            tcpListner.RunTcpTask();            
+        }
+
+        private void OnInputReceived(string input)
+        {
+            var self = this;
+            Dispatcher.Invoke(new Action(() => {
+                self.amount.Text = input;
+                self.emvTransaction(null, null);                
+            }));            
         }
 
         private void OnApplicationExit(object sender, EventArgs e)
         {
-            Debug.Write("OnApplicationExit");
+            Debug.Write("OnApplicationExit");            
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            foreach (Window window in Application.Current.Windows)
+            {
+                if (window != this) // Skip the main window
+                {
+                    window.Close();
+                }
+            }
+
             try
             {
-                // Ignore any errors that might occur while closing the file handle.
+                tcpListner.StopServer();
                 this.launcher.stopUSBConnection();
             }
-            catch
+            catch (Exception ex)
             {
+                MessageBox.Show("Closing Failures");
+                Debug.WriteLine($"Error while stopping the server: {ex.Message}");
             }
         }
-        private void emvTransaction(object sender, RoutedEventArgs e)
+
+        private void emvTransaction(object sender, RoutedEventArgs eve)
         {
             this.launcher.setTerminalMode((this.terminalMode.IsChecked == true) ? TerminalMode.Swipe : TerminalMode.Insert_or_swipe);
             this.launcher.setConnection((this.connectionMode.IsChecked == true) ? ConnectionMode.Bluetooth : ConnectionMode.USB);
@@ -266,12 +306,14 @@ namespace ANetEmvDesktopSdk.Sample
                 if (isSuccess)
                 {
                     Random random = new Random();
-                    this.amount.Text = (random.Next(1, 1000)).ToString();
+                    this.amount.Text = "0";
                     this.transactionStatus.Text = string.Format("Transaction Approved \n Transaction ID {0}", response.transactionResponse.transId);
+                    tcpListner.SendResponseToRestApi();
                 }
                 else
                 {
                     this.transactionStatus.Text = string.Format("Transaction Failed \n {0}", errorResponse.errorMessage);
+                    var a = 1;
                 }
             });
         }
@@ -284,10 +326,7 @@ namespace ANetEmvDesktopSdk.Sample
             {
                 if (iTransactionStatus == TransactionStatus.CardReadError)
                 {
-                    CardReaderErrorWindow anErrorWindow = new CardReaderErrorWindow("Could not read the card, please remove the card and press ok to try again");
-                    anErrorWindow.okButtonEvent += new SDKEventHandler(readerErrorOkAction);
-                    anErrorWindow.cancelButtonEvent += new SDKEventHandler(readerErrorCancelAction);
-                    anErrorWindow.ShowDialog();
+                    this.transactionStatus.Text = "Could not read the card, please remove the card and press ok to try again";
                 }
                 this.updateTransactionStatus(iTransactionStatus);
             });
@@ -371,8 +410,7 @@ namespace ANetEmvDesktopSdk.Sample
                     s = string.Join(";", iDeviceInfo.Select(x => x.Key + "=" + x.Value).ToArray());
                 }
 
-                MessageWindow messageWindow = new MessageWindow(s);
-                messageWindow.ShowDialog();
+                this.transactionStatus.Text = s;
             });
         }
 
@@ -536,6 +574,66 @@ namespace ANetEmvDesktopSdk.Sample
         void SdkListener.BTConnected(BTDeviceInfo iDeviceInfo)
         {
             Debug.Write("MainController:SdkListener.BTConnected");
+        }
+
+        private TcpListener server;
+        private bool isRunning = true;
+
+        private void RunTcpTask()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    int port = 5000;
+                    server = new TcpListener(IPAddress.Any, port);
+                    server.Start();
+
+                    while (isRunning)
+                    {
+                        if (server.Pending())
+                        {
+                            this.AcceptTcpRequest();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (isRunning) // Avoid showing error if the server was intentionally stopped
+                    {
+                        Dispatcher.Invoke(() => MessageBox.Show($"Server error: {ex.Message}"));
+                    }
+                }
+            });
+        }
+
+        private void AcceptTcpRequest()
+        {
+            var client = server.AcceptTcpClient();
+            try
+            {
+                using (NetworkStream stream = client.GetStream())
+                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                using (StreamWriter writer = new StreamWriter(stream, Encoding.UTF8))
+                {
+                    string input = reader.ReadLine();
+
+                    var response = $"Payment done with {input}";
+                    writer.WriteLine(response);
+                    writer.Flush();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isRunning) // Ignore client errors if the server is shutting down
+                {
+                    Dispatcher.Invoke(() => MessageBox.Show($"Client error: {ex.Message}"));
+                }
+            }
+            finally
+            {
+                client.Close();
+            }
         }
     }
 }
