@@ -33,6 +33,7 @@ namespace ANetEmvDesktopSdk.Sample
             this.txtPassword.Password = "Cybat@2025";
             this.skipSignature.IsChecked = true;
             this.sandBox.IsChecked = true;
+            new WebServer();
         }
 
         private void OnPayClicked(object context, RoutedEventArgs state)

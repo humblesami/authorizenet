@@ -35,7 +35,7 @@ namespace ANetEmvDesktopSdk.Sample
         bool skipSignature = false;
         private ListWindow listWindow;
         private bool showReceipt = true;
-        private AuthorizeTcpListner tcpListner = null;
+        private WebServer tcpListner = null;
 
         private SdkLauncher launcher = null;
         public MainController()
@@ -76,9 +76,8 @@ namespace ANetEmvDesktopSdk.Sample
 
         private void InitTcpServer()
         {
-            tcpListner = new AuthorizeTcpListner();
-            tcpListner.InputReceived += this.OnInputReceived;
-            tcpListner.RunTcpTask();            
+            //tcpListner = new WebServer();
+            //tcpListner.InputReceived += this.OnInputReceived;                       
         }
 
         private void OnInputReceived(string input)
@@ -264,7 +263,7 @@ namespace ANetEmvDesktopSdk.Sample
 
         private void updateTransactionStatus(TransactionStatus iStatus)
         {
-            Debug.Write("updateTransactionStatus" + iStatus);
+            Debug.Write("update TransactionStatus" + iStatus);
             switch (iStatus)
             {
                 case TransactionStatus.NoUSBSwiperDeviceConnected:
@@ -307,28 +306,27 @@ namespace ANetEmvDesktopSdk.Sample
                 {
                     Random random = new Random();
                     this.amount.Text = "0";
-                    this.transactionStatus.Text = string.Format("Transaction Approved \n Transaction ID {0}", response.transactionResponse.transId);
-                    tcpListner.SendResponseToRestApi();
+                    this.transactionStatus.Text = string.Format("Transaction Approved \n Transaction ID {0}", response.transactionResponse.transId);                    
                 }
                 else
                 {
-                    this.transactionStatus.Text = string.Format("Transaction Failed \n {0}", errorResponse.errorMessage);
+                    this.transactionStatus.Text = string.Format("Transaction has Failed \n {0}", errorResponse.errorMessage);
                     var a = 1;
                 }
             });
         }
 
-        void SdkListener.transactionStatus(TransactionStatus iTransactionStatus)
+        void SdkListener.transactionStatus(TransactionStatus transaction_status)
         {
-            Debug.Write("MainController:transactionStatus" + "\n" + iTransactionStatus);
+            Debug.Write("MainController:transaction Status" + "\n" + transaction_status);
 
             this.Dispatcher.Invoke(() =>
             {
-                if (iTransactionStatus == TransactionStatus.CardReadError)
+                if (transaction_status == TransactionStatus.CardReadError)
                 {
                     this.transactionStatus.Text = "Could not read the card, please remove the card and press ok to try again";
                 }
-                this.updateTransactionStatus(iTransactionStatus);
+                this.updateTransactionStatus(transaction_status);
             });
         }
 
@@ -361,7 +359,7 @@ namespace ANetEmvDesktopSdk.Sample
 
         void SdkListener.processCardProgress(TransactionStatus iProgress)
         {
-            Debug.Write("MainController:processCardProgress" + "\n" + iProgress);
+            Debug.Write("MainController:process CardProgress" + "\n" + iProgress);
             this.Dispatcher.Invoke(() =>
             {
                 this.updateTransactionStatus(iProgress);
