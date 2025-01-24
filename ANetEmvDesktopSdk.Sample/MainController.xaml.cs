@@ -76,15 +76,15 @@ namespace ANetEmvDesktopSdk.Sample
 
         private void InitTcpServer()
         {
-            //tcpListner = new WebServer();
-            //tcpListner.InputReceived += this.OnInputReceived;                       
+            tcpListner = new WebServer();
+            tcpListner.InputReceived += this.OnInputReceived;
         }
 
-        private void OnInputReceived(string input)
+        private void OnInputReceived(Dictionary<string, string> data)
         {
             var self = this;
             Dispatcher.Invoke(new Action(() => {
-                self.amount.Text = input;
+                self.amount.Text = data["amount"];
                 self.emvTransaction(null, null);                
             }));            
         }
@@ -108,7 +108,14 @@ namespace ANetEmvDesktopSdk.Sample
             try
             {
                 tcpListner.StopServer();
-                this.launcher.stopUSBConnection();
+                try
+                {
+                    this.launcher.stopUSBConnection();
+                }
+                catch
+                {
+
+                }                
             }
             catch (Exception ex)
             {
@@ -121,7 +128,8 @@ namespace ANetEmvDesktopSdk.Sample
         {
             this.launcher.setTerminalMode((this.terminalMode.IsChecked == true) ? TerminalMode.Swipe : TerminalMode.Insert_or_swipe);
             this.launcher.setConnection((this.connectionMode.IsChecked == true) ? ConnectionMode.Bluetooth : ConnectionMode.USB);
-            this.launcher.startEMVTransaction(this.getRequest(), SDKTransactionType.GOODS, this);
+            var req = this.getRequest();
+            this.launcher.startEMVTransaction(req, SDKTransactionType.GOODS, this);
         }
 
         private void processCard(object sender, RoutedEventArgs e)
@@ -369,12 +377,12 @@ namespace ANetEmvDesktopSdk.Sample
         void SdkListener.processCardCompletedWithStatus(bool iStatus)
         {
             Debug.Write("MainController:processCardCompletedWithStatus" + "\n" + iStatus);
-
             this.Dispatcher.Invoke(() =>
             {
                 if (iStatus)
                 {
                     this.transactionStatus.Text = "Processed card successfully.";
+                    this.tcpListner.SendResponseToRestApi(null);
                 }
                 else
                 {

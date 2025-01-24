@@ -1,20 +1,19 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Web;
 using System.Text;
+using System.Windows;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Windows;
-using System.Threading;
+using System.Net.Http;
 
 
 namespace ANetEmvDesktopSdk.Sample
-{    
+{
     public partial class WebServer
     {
         private HttpListener _listener;
-        public delegate void InputReceivedEventHandler(string input);
+        public delegate void InputReceivedEventHandler(Dictionary<string, string> input);
         public event InputReceivedEventHandler InputReceived;
 
         public WebServer()
@@ -53,37 +52,31 @@ namespace ANetEmvDesktopSdk.Sample
             }
         }
 
-        public void OnTcpInput(Dictionary<string, string> json_input)
-        {
-            string amt = json_input["amount"];
-            this.InputReceived?.Invoke(amt);
-        }
-
         private async Task<Task> ProcessRequest(HttpListenerContext context)
         {
             try
             {
+                DateTime dt1 = DateTime.Now;
                 // Get the request and response objects
                 var request = context.Request;                
                 string queryString = context.Request.Url.Query;
                 var queryParams = System.Web.HttpUtility.ParseQueryString(queryString);
-                Dictionary<string, string> param_dict = new Dictionary<string, string>();
+                Dictionary<string, string> json_input = new Dictionary<string, string>();
                 foreach (string key in queryParams.AllKeys)
                 {
                     string value = queryParams[key];
-                    param_dict[key] = value;
-                    Console.WriteLine($"Key: {key}, Value: {value}");
+                    json_input[key] = value;
                 }
 
                 var response = context.Response;
                 response.ContentType = "text/plain";
                 response.ContentEncoding = Encoding.UTF8;
-                var delay = Convert.ToDouble(param_dict["delay"]);
+                var delay = Convert.ToDouble(json_input["delay"]);
                 var delay_int = Convert.ToInt32((double)delay);
                 await Task.Delay(TimeSpan.FromSeconds(delay));
+                this.InputReceived?.Invoke(json_input);
                 using (var writer = new StreamWriter(response.OutputStream))
                 {
-                    this.OnTcpInput(param_dict);
                     writer.WriteLine("done");
                 }
             }
@@ -98,6 +91,27 @@ namespace ANetEmvDesktopSdk.Sample
                 context.Response.Close();
             }
             return Task.CompletedTask;
+        }
+
+        public void SendResponseToRestApi(Dictionary<string, string> data)
+        {
+            using (var client = new HttpClient())
+            {
+                string apiUrl = "http://localhost:8017/authorize-net/response?status=" + data["status"]+"&order_id="+data["order_id"];
+                try
+                {
+                    client.GetAsync(apiUrl);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"{ex.Message}");
+                }
+            }
+        }
+
+        private void LogErrors()
+        {
+
         }
     }
 }

@@ -29,11 +29,10 @@ namespace ANetEmvDesktopSdk.Sample
             this.backgroundWorkerLogin.DoWork += new DoWorkEventHandler(this.backgroundWorkerLogin_GetAuthenticationToken);
             this.backgroundWorkerLogin.ProgressChanged += new ProgressChangedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenProgress);
             this.backgroundWorkerLogin.RunWorkerCompleted += new RunWorkerCompletedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenCompleted);
-            this.txtUsername.Text = "umarfarooq845";
+            this.txtUsername.Text = "samiakram75";
             this.txtPassword.Password = "Cybat@2025";
             this.skipSignature.IsChecked = true;
             this.sandBox.IsChecked = true;
-            new WebServer();
         }
 
         private void OnPayClicked(object context, RoutedEventArgs state)
