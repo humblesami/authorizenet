@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using AuthorizeNet.Api.Contracts.V1;
 using AuthorizeNet.Api.Controllers;
 using AuthorizeNet.Api.Controllers.Bases;
+using System.IO;
 
 
 namespace ANetEmvDesktopSdk.Sample
@@ -21,7 +22,7 @@ namespace ANetEmvDesktopSdk.Sample
 
         public MainWindow()
         {
-            InitializeComponent();
+            InitializeComponent();            
             System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
@@ -30,9 +31,9 @@ namespace ANetEmvDesktopSdk.Sample
             this.backgroundWorkerLogin.ProgressChanged += new ProgressChangedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenProgress);
             this.backgroundWorkerLogin.RunWorkerCompleted += new RunWorkerCompletedEventHandler(this.backgroundWorkerLogin_GetAuthenticationTokenCompleted);
             this.txtUsername.Text = "samiakram75";
-            this.txtPassword.Password = "Cybat@2025";
+            this.txtPassword.Password = "Mup#UhQiS5W_WRC";
             this.skipSignature.IsChecked = true;
-            this.sandBox.IsChecked = true;
+            this.sandBox.IsChecked = true;            
         }
 
         private void OnPayClicked(object context, RoutedEventArgs state)

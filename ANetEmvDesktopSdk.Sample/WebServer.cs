@@ -1,117 +1,128 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Text;
-using System.Windows;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Net.Http;
-
+using System.Collections;
 
 namespace ANetEmvDesktopSdk.Sample
 {
     public partial class WebServer
     {
-        private HttpListener _listener;
-        public delegate void InputReceivedEventHandler(Dictionary<string, string> input);
-        public event InputReceivedEventHandler InputReceived;
+        private readonly HttpListener _listener;
+        private readonly Logger _logger = new Logger();
+        private readonly HashSet<string> _processedRequests = new HashSet<string>(); // To track processed requests
 
+        public event Action<Dictionary<string, string>> InputReceived;
+        public static Dictionary<string, string> NoDeviceOrServerDown = new Dictionary<string, string>();
         public WebServer()
         {
-            // Configure the listener
-            _listener = new HttpListener();
-            _listener.Prefixes.Add("http://localhost:8060/");
-
-            // Start listening for requests asynchronously
-            _listener.Start();
-            Task.Run(() => HandleRequests());
+            try
+            {
+                _listener = new HttpListener();
+                _listener.Prefixes.Add("http://localhost:8060/");
+                _listener.Start();
+                _logger.log("Web server started successfully.");
+                Task.Run(() => HandleRequests());
+            }
+            catch (Exception ex)
+            {
+                _logger.log("Error starting web server", ex);
+            }
         }
 
         public void StopServer()
         {
             try
             {
-                this._listener.Stop();
-                this._listener.Close();
+                _listener.Stop();
+                _listener.Close();
+                _logger.log("Web server stopped successfully.");
             }
-            catch
+            catch (Exception ex)
             {
-                MessageBox.Show("Failed to stop/close");
-            }            
+                _logger.log("Error stopping web server", ex);
+            }
         }
 
         private async Task HandleRequests()
         {
-            while (true)
+            while (_listener.IsListening)
             {
-                // Wait for a request
-                var context = await _listener.GetContextAsync();
-
-                // Handle the request asynchronously
-                Task.Run(() => ProcessRequest(context));
+                try
+                {
+                    var context = await _listener.GetContextAsync();
+                    await ProcessRequestAsync(context); // Process the request
+                }
+                catch (Exception ex)
+                {
+                    _logger.log("Error handling request", ex);
+                }
             }
         }
 
-        private async Task<Task> ProcessRequest(HttpListenerContext context)
+        private async Task ProcessRequestAsync(HttpListenerContext context)
         {
             try
             {
-                DateTime dt1 = DateTime.Now;
-                // Get the request and response objects
-                var request = context.Request;                
-                string queryString = context.Request.Url.Query;
-                var queryParams = System.Web.HttpUtility.ParseQueryString(queryString);
-                Dictionary<string, string> json_input = new Dictionary<string, string>();
-                foreach (string key in queryParams.AllKeys)
+                if(!context.Request.RawUrl.StartsWith("/?pos_"))
                 {
-                    string value = queryParams[key];
-                    json_input[key] = value;
+                    return;
+                }
+                string requestId = Guid.NewGuid().ToString(); // Generate a unique ID for the request
+                _logger.log($"Processing request: {requestId}, Method: {context.Request.HttpMethod}, URL: {context.Request.Url}");
+
+                if (_processedRequests.Contains(requestId))
+                {
+                    _logger.log($"Duplicate request detected: {requestId}");
+                    return; // Ignore duplicate requests
                 }
 
-                var response = context.Response;
-                response.ContentType = "text/plain";
-                response.ContentEncoding = Encoding.UTF8;
-                var delay = Convert.ToDouble(json_input["delay"]);
-                var delay_int = Convert.ToInt32((double)delay);
-                await Task.Delay(TimeSpan.FromSeconds(delay));
-                this.InputReceived?.Invoke(json_input);
-                using (var writer = new StreamWriter(response.OutputStream))
+                _processedRequests.Add(requestId);
+
+                // Parse query parameters
+                var queryParams = System.Web.HttpUtility.ParseQueryString(context.Request.Url.Query);
+                var jsonInput = new Dictionary<string, string>();
+
+                foreach (string key in queryParams.AllKeys)
                 {
-                    writer.WriteLine("done");
+                    jsonInput[key] = queryParams[key];
+                }
+                string actualValue;
+                if (!jsonInput.TryGetValue("amount", out actualValue))
+                {
+                    using (var writer = new StreamWriter(context.Response.OutputStream))
+                        await writer.WriteLineAsync("Invalid amount");
+                    return;
+                }
+                if (!jsonInput.TryGetValue("pos_order_id", out actualValue))
+                {
+                    using (var writer = new StreamWriter(context.Response.OutputStream))
+                        await writer.WriteLineAsync("Invalid pos_order_id");
+                    return;
+                }
+                NoDeviceOrServerDown = jsonInput;
+                InputReceived?.Invoke(jsonInput);
+
+                // Write response
+                context.Response.ContentType = "text/plain";
+                context.Response.ContentEncoding = Encoding.UTF8;
+
+                using (var writer = new StreamWriter(context.Response.OutputStream))
+                {
+                    await writer.WriteLineAsync("done");
                 }
             }
             catch (Exception ex)
             {
-                // Handle exceptions (e.g., log, display error)
-                Console.WriteLine($"Error processing request: {ex.Message}");
+                _logger.log("Error processing request", ex);
             }
             finally
             {
-                // Close the response
                 context.Response.Close();
             }
-            return Task.CompletedTask;
-        }
-
-        public void SendResponseToRestApi(Dictionary<string, string> data)
-        {
-            using (var client = new HttpClient())
-            {
-                string apiUrl = "http://localhost:8017/authorize-net/response?status=" + data["status"]+"&order_id="+data["order_id"];
-                try
-                {
-                    client.GetAsync(apiUrl);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"{ex.Message}");
-                }
-            }
-        }
-
-        private void LogErrors()
-        {
-
         }
     }
 }

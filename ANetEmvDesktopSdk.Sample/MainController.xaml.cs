@@ -16,13 +16,12 @@ using System.Collections.Generic;
 using ANetEmvDesktopSdk.Services;
 using AuthorizeNet.Api.Contracts.V1;
 using AuthorizeNet.Api.Controllers.Bases;
+using System.Web.Util;
+using System.Net.Http;
 
 
 namespace ANetEmvDesktopSdk.Sample
-{
-    /// <summary>
-    /// Interaction logic for MainController.xaml
-    /// </summary>
+{    
     public partial class MainController : Window, SdkListener
     {
         public static string merchantName = null;
@@ -34,16 +33,17 @@ namespace ANetEmvDesktopSdk.Sample
         private string terminalID = null;
         bool skipSignature = false;
         private ListWindow listWindow;
-        private bool showReceipt = true;
-        private WebServer tcpListner = null;
-
+        private bool showReceipt = true;        
         private SdkLauncher launcher = null;
+
+        private WebServer webServer = null;
+        private Logger logger = new Logger();
         public MainController()
         {
             InitializeComponent();
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Application.Current.Exit += new ExitEventHandler(this.OnApplicationExit);
-            this.InitTcpServer();            
+            this.InitWebServer();            
         }
 
         public MainController(AuthorizeNet.Environment iEnvironment,
@@ -71,22 +71,97 @@ namespace ANetEmvDesktopSdk.Sample
             this.launcher = new SdkLauncher(iEnvironment, iCurrencyCode, iTerminalID, iSkipSignature, iShowReceipt);
             this.launcher.setMerchantInfo(merchantName, merchantID);
             this.launcher.enableLogging();
-            this.InitTcpServer();
+            this.InitWebServer();
         }
-
-        private void InitTcpServer()
+        
+        void SdkListener.transactionCompleted(createTransactionResponse response, bool isSuccess, string customerSignature, ErrorResponse errorResponse)
         {
-            tcpListner = new WebServer();
-            tcpListner.InputReceived += this.OnInputReceived;
+            logger.log("\n MainController:transaction Completed" + "\n" + response + "\n" + isSuccess + "\n" + errorResponse, null);
+
+            this.Dispatcher.Invoke(() =>
+            {
+                Dictionary<string, string> res_data = new Dictionary<string, string>();
+                if (isSuccess)
+                {
+                    Random random = new Random();
+                    this.amount.Text = "0";
+                    string res_message = "Transaction Approved \n Transaction ID " + response.transactionResponse.transId;
+                    this.transactionStatus.Text = res_message;
+                    var user_fields = response.transactionResponse.userFields;
+                    res_data = ConvertToBackToDict(user_fields);
+                    res_data["status"] = "ok";
+                }
+                else
+                {
+                    this.transactionStatus.Text = string.Format("Transaction has Failed \n {0}", errorResponse.errorMessage);                    
+                    if (response != null && response.transactionResponse != null)
+                    {
+                        var user_fields = response.transactionResponse.userFields;
+                        res_data = ConvertToBackToDict(user_fields);
+                    }
+                    else
+                    {
+                        res_data = WebServer.NoDeviceOrServerDown;
+                    }
+                    res_data["status"] = "failed";                    
+                }
+                SendResponseToApi(res_data);
+            });
         }
 
-        private void OnInputReceived(Dictionary<string, string> data)
+        public void SendResponseToApi(Dictionary<string, string> data)
+        {
+            var queryString = $"status={data["status"]}&order_id={data["pos_order_id"]}";
+            queryString += $"&token=8dhKKm929hs83jsHj5ss82";
+            var apiUrl = $"{data["host_url"]}/authorize-net/callback?{queryString}";
+            logger.log(apiUrl);
+            using (var client = new HttpClient())
+            {
+                client.GetAsync(apiUrl);
+            }
+        }
+
+        public userField[] ConvertToTransactionFields(Dictionary<string, string> data)
+        {
+            return data.Select(kv => new userField
+            {
+                name = kv.Key,
+                value = kv.Value
+            }).ToArray();
+        }
+
+        public Dictionary<string, string> ConvertToBackToDict(userField[] data)
+        {
+            Dictionary<string, string> res_data = new Dictionary<string, string>();
+            foreach (var item in data)
+            {
+                res_data[item.name] = res_data[item.value];
+            }
+            return res_data;
+        }
+
+
+        private void InitWebServer()
+        {
+            webServer = new WebServer();
+            webServer.InputReceived += this.OnInputReceived;
+        }
+
+        private async void OnInputReceived(Dictionary<string, string> data)
         {
             var self = this;
             Dispatcher.Invoke(new Action(() => {
-                self.amount.Text = data["amount"];
-                self.emvTransaction(null, null);                
-            }));            
+                try
+                {
+                    self.amount.Text = data["amount"];
+                    var userFields = ConvertToTransactionFields(data);
+                    self.emvTransaction(userFields, null);
+                }
+                catch(Exception ex)
+                {
+                    logger.log("Error in OnInputReceived", ex);
+                }                
+            }));
         }
 
         private void OnApplicationExit(object sender, EventArgs e)
@@ -107,20 +182,15 @@ namespace ANetEmvDesktopSdk.Sample
 
             try
             {
-                tcpListner.StopServer();
-                try
+                webServer.StopServer();
+                if (this.launcher != null)
                 {
                     this.launcher.stopUSBConnection();
                 }
-                catch
-                {
-
-                }                
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Closing Failures");
-                Debug.WriteLine($"Error while stopping the server: {ex.Message}");
+                logger.log("Error in stop apps", ex);
             }
         }
 
@@ -129,6 +199,7 @@ namespace ANetEmvDesktopSdk.Sample
             this.launcher.setTerminalMode((this.terminalMode.IsChecked == true) ? TerminalMode.Swipe : TerminalMode.Insert_or_swipe);
             this.launcher.setConnection((this.connectionMode.IsChecked == true) ? ConnectionMode.Bluetooth : ConnectionMode.USB);
             var req = this.getRequest();
+            req.transactionRequest.userFields = (userField[])sender;
             this.launcher.startEMVTransaction(req, SDKTransactionType.GOODS, this);
         }
 
@@ -302,27 +373,7 @@ namespace ANetEmvDesktopSdk.Sample
                     this.transactionStatus.Text = "Please remove the card";
                     break;
             }
-        }
-
-        void SdkListener.transactionCompleted(createTransactionResponse response, bool isSuccess, string customerSignature, ErrorResponse errorResponse)
-        {
-            Debug.Write("\n MainController:transactionCompleted" + "\n" + response + "\n" + isSuccess + "\n" + errorResponse);
-
-            this.Dispatcher.Invoke(() =>
-            {
-                if (isSuccess)
-                {
-                    Random random = new Random();
-                    this.amount.Text = "0";
-                    this.transactionStatus.Text = string.Format("Transaction Approved \n Transaction ID {0}", response.transactionResponse.transId);                    
-                }
-                else
-                {
-                    this.transactionStatus.Text = string.Format("Transaction has Failed \n {0}", errorResponse.errorMessage);
-                    var a = 1;
-                }
-            });
-        }
+        }        
 
         void SdkListener.transactionStatus(TransactionStatus transaction_status)
         {
@@ -381,8 +432,7 @@ namespace ANetEmvDesktopSdk.Sample
             {
                 if (iStatus)
                 {
-                    this.transactionStatus.Text = "Processed card successfully.";
-                    this.tcpListner.SendResponseToRestApi(null);
+                    this.transactionStatus.Text = "Processed card successfully.";                    
                 }
                 else
                 {
