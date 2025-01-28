@@ -107,14 +107,12 @@ namespace ANetEmvDesktopSdk.Sample
                 }
                 SendResponseToApi(res_data);
             });
-        }       
-
-
+        }
 
         public async void SendResponseToApi(Dictionary<string, string> data)
         {
             var queryString = $"status={data["status"]}&order_id={data["pos_order_id"]}";
-            queryString += $"&token=8dhKKm929hs83jsHj5ss82";
+            queryString += $"&token=" + data["token"] +"&olp=" + data["olp"];
             var apiUrl = $"{data["host_url"]}/authorize-net/callback?{queryString}";
             logger.log(apiUrl);
             using (var client = new HttpClient())
