@@ -17,7 +17,7 @@ namespace ANetEmvDesktopSdk.Sample
         {
             this.log_file_path = file_path;
         }
-        public void log(string message, Exception ex = null, bool clear_all=false)
+        public void log(string message, Exception ex = null, bool append=true)
         {
             if (!File.Exists(this.log_file_path))
             {
@@ -28,9 +28,9 @@ namespace ANetEmvDesktopSdk.Sample
                 message += message + " => " + ex.ToString();
             }
             message = DateTime.Now.ToString("T") + " " + message;
-            using (var sw = new StreamWriter(log_file_path, clear_all))
+            using (var sw = new StreamWriter(log_file_path, append))
             {
-                sw.WriteLine(message);
+                sw.WriteLineAsync();
             }
         }
     }

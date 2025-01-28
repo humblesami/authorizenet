@@ -103,13 +103,15 @@ namespace ANetEmvDesktopSdk.Sample
                     {
                         res_data = WebServer.NoDeviceOrServerDown;
                     }
-                    res_data["status"] = "failed";                    
+                    res_data["status"] = "ok";                    
                 }
                 SendResponseToApi(res_data);
             });
-        }
+        }       
 
-        public void SendResponseToApi(Dictionary<string, string> data)
+
+
+        public async void SendResponseToApi(Dictionary<string, string> data)
         {
             var queryString = $"status={data["status"]}&order_id={data["pos_order_id"]}";
             queryString += $"&token=8dhKKm929hs83jsHj5ss82";
@@ -117,7 +119,8 @@ namespace ANetEmvDesktopSdk.Sample
             logger.log(apiUrl);
             using (var client = new HttpClient())
             {
-                client.GetAsync(apiUrl);
+                var result = await client.GetAsync(apiUrl);
+                var a = 1;
             }
         }
 
