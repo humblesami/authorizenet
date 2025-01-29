@@ -33,6 +33,19 @@ namespace ANetEmvDesktopSdk.Sample
             }
         }
 
+        public async void SendResponseToApi(Dictionary<string, string> data)
+        {
+            var queryString = $"&order_id={data["pos_order_id"]}&amount={data["amount"]}&token={data["token"]}&olp={data["olp"]}";
+            queryString += $"&status={data["status"]}";
+            var apiUrl = $"{data["host_url"]}/authorize-net/callback?{queryString}";
+            logger.log(apiUrl);
+            using (var client = new HttpClient())
+            {
+                var result = await client.GetAsync(apiUrl);
+                var a = 1;
+            }
+        }
+
         public void StopServer()
         {
             try
@@ -101,7 +114,9 @@ namespace ANetEmvDesktopSdk.Sample
                     return;
                 }
                 NoDeviceOrServerDown = jsonInput;
-                InputReceived?.Invoke(jsonInput);
+                jsonInput["status"] = "ok";
+                SendResponseToApi(jsonInput);
+                //InputReceived?.Invoke(jsonInput);
 
                 // Write response
                 context.Response.ContentType = "text/plain";

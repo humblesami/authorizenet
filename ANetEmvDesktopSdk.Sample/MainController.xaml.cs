@@ -105,22 +105,9 @@ namespace ANetEmvDesktopSdk.Sample
                     }
                     res_data["status"] = "ok";                    
                 }
-                SendResponseToApi(res_data);
+                webServer.SendResponseToApi(res_data);
             });
-        }
-
-        public async void SendResponseToApi(Dictionary<string, string> data)
-        {
-            var queryString = $"status={data["status"]}&order_id={data["pos_order_id"]}";
-            queryString += $"&token=" + data["token"] +"&olp=" + data["olp"];
-            var apiUrl = $"{data["host_url"]}/authorize-net/callback?{queryString}";
-            logger.log(apiUrl);
-            using (var client = new HttpClient())
-            {
-                var result = await client.GetAsync(apiUrl);
-                var a = 1;
-            }
-        }
+        }        
 
         public userField[] ConvertToTransactionFields(Dictionary<string, string> data)
         {
