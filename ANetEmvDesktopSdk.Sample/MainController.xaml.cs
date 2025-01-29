@@ -103,7 +103,7 @@ namespace ANetEmvDesktopSdk.Sample
                     {
                         res_data = WebServer.NoDeviceOrServerDown;
                     }
-                    res_data["status"] = "ok";                    
+                    res_data["status"] = "failed";                    
                 }
                 webServer.SendResponseToApi(res_data);
             });
